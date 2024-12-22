@@ -1,7 +1,16 @@
 package main
 
-import "fmt"
+import (
+	"net/http"
+)
 
 func main() {
-	fmt.Println("hello world")
+	webDir := "./web"
+
+	http.Handle("/", http.FileServer(http.Dir(webDir)))
+
+	err := http.ListenAndServe(":7540", nil)
+	if err != nil {
+		panic(err)
+	}
 }
