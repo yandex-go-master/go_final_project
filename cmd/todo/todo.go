@@ -7,6 +7,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/yandex-go-master/go_final_project/internal/database"
+	"github.com/yandex-go-master/go_final_project/internal/handlers"
 	_ "modernc.org/sqlite"
 )
 
@@ -30,6 +31,7 @@ func main() {
 	webDir := "./web"
 
 	http.Handle("/", http.FileServer(http.Dir(webDir)))
+	http.HandleFunc("/api/nextdate", handlers.NextDate)
 
 	err = http.ListenAndServe(":"+port, nil)
 	if err != nil {
