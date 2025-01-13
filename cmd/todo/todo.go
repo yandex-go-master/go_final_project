@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	log.Println("starting up...")
+	log.Println("Starting up...")
 
 	err := godotenv.Load()
 	if err != nil {
@@ -24,14 +24,16 @@ func main() {
 	if port == "" {
 		port = "7540"
 	}
-	log.Printf("working port: %s", port)
+	log.Printf("Working port: %s", port)
 
-	database.InitDb()
+	db := database.InitDb()
+	defer db.Close()
 
 	webDir := "./web"
 
 	http.Handle("/", http.FileServer(http.Dir(webDir)))
 	http.HandleFunc("/api/nextdate", handlers.NextDate)
+	http.HandleFunc("/api/task", handlers.RootTask(db))
 
 	err = http.ListenAndServe(":"+port, nil)
 	if err != nil {

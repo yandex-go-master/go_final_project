@@ -11,12 +11,12 @@ const DateFormat = "20060102"
 
 func NextDate(now time.Time, date string, repeat string) (string, error) {
 	if repeat == "" {
-		return "", fmt.Errorf("empty repeat rule")
+		return "", fmt.Errorf("Empty repeat rule")
 	}
 
 	startDate, err := time.Parse(DateFormat, date)
 	if err != nil {
-		return "", fmt.Errorf("wrong date format: %w", err)
+		return "", fmt.Errorf("Invalid date format: %w", err)
 	}
 
 	repeatRule := strings.Split(repeat, " ")
@@ -24,11 +24,11 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 	switch repeatRule[0] {
 	case "d":
 		if len(repeatRule) != 2 {
-			return "", fmt.Errorf("wrong day repeat rule format")
+			return "", fmt.Errorf("Invalid day repeat rule format")
 		}
 		days, err := strconv.Atoi(repeatRule[1])
 		if err != nil || days < 1 || days > 400 {
-			return "", fmt.Errorf("wrong day interval")
+			return "", fmt.Errorf("Invalid day interval")
 		}
 		nextDate := startDate
 		for {
@@ -45,14 +45,14 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		return nextDate.Format(DateFormat), nil
 	case "w":
 		if len(repeatRule) != 2 {
-			return "", fmt.Errorf("wrong week repeat rule format")
+			return "", fmt.Errorf("Invalid week repeat rule format")
 		}
 		days := strings.Split(repeatRule[1], ",")
 		var repeatDays []int
 		for _, day := range days {
 			dayNumber, err := strconv.Atoi(day)
 			if err != nil || dayNumber < 1 || dayNumber > 7 {
-				return "", fmt.Errorf("wrong week interval")
+				return "", fmt.Errorf("Invalid week interval")
 			}
 			repeatDays = append(repeatDays, dayNumber)
 		}
@@ -69,7 +69,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		}
 	case "m":
 		if len(repeatRule) < 2 || len(repeatRule) > 3 {
-			return "", fmt.Errorf("wrong month repeat rule format")
+			return "", fmt.Errorf("Invalid month repeat rule format")
 		}
 
 		var repeatDays []int
@@ -77,7 +77,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		for _, day := range days {
 			dayNumber, err := strconv.Atoi(day)
 			if err != nil || dayNumber < -2 || dayNumber > 31 || dayNumber == 0 {
-				return "", fmt.Errorf("wrong month interval: %w", err)
+				return "", fmt.Errorf("Invalid month interval: %w", err)
 			}
 			repeatDays = append(repeatDays, dayNumber)
 		}
@@ -88,7 +88,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 			for _, month := range months {
 				monthNumber, err := strconv.Atoi(month)
 				if err != nil || monthNumber < 1 || monthNumber > 12 {
-					return "", fmt.Errorf("wrong month interval: %w", err)
+					return "", fmt.Errorf("Invalid month interval: %w", err)
 				}
 				repeatMonths = append(repeatMonths, monthNumber)
 			}
@@ -116,7 +116,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 			}
 		}
 	default:
-		return "", fmt.Errorf("wrong repeat rule format")
+		return "", fmt.Errorf("Invalid repeat rule format")
 	}
 }
 
