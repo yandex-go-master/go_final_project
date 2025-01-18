@@ -1,13 +1,18 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/yandex-go-master/go_final_project/internal/database"
 	"github.com/yandex-go-master/go_final_project/internal/nextdate"
 )
@@ -44,17 +49,17 @@ func NextDate(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(nextDate))
 }
 
-func RootTask(db *sql.DB) func(w http.ResponseWriter, r *http.Request) {
+func RootTask() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
-			PostTask(w, r, db)
+			PostTask(w, r)
 		case http.MethodGet:
-			GetTask(w, r, db)
+			GetTask(w, r)
 		case http.MethodPut:
-			UpdateTask(w, r, db)
+			UpdateTask(w, r)
 		case http.MethodDelete:
-			DeleteTask(w, r, db)
+			DeleteTask(w, r)
 		default:
 			http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
 			log.Println("Method not allowed")
@@ -62,7 +67,7 @@ func RootTask(db *sql.DB) func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func PostTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+func PostTask(w http.ResponseWriter, r *http.Request) {
 	var task Task
 
 	err := json.NewDecoder(r.Body).Decode(&task)
@@ -120,7 +125,7 @@ func PostTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	log.Println("INSERTTASK: task.Comment =", task.Comment)
 	log.Println("INSERTTASK: task.Repeat =", task.Repeat)
 
-	taskId, err := database.AddTask(db, task.Date, task.Title, task.Comment, task.Repeat)
+	taskId, err := database.AddTask(task.Date, task.Title, task.Comment, task.Repeat)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Println("Invalid task Id:", err)
@@ -132,7 +137,7 @@ func PostTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func GetTasks(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+func GetTasks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
@@ -140,7 +145,7 @@ func GetTasks(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	TasksLimit := 20
 
-	rows, err := db.Query("SELECT * FROM scheduler ORDER BY date ASC LIMIT ?", TasksLimit)
+	rows, err := database.Db.Query("SELECT * FROM scheduler ORDER BY date ASC LIMIT ?", TasksLimit)
 	if err != nil {
 		http.Error(w, `{"error": "Database select error"}`, http.StatusInternalServerError)
 		return
@@ -175,7 +180,7 @@ func GetTasks(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	}
 }
 
-func GetTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+func GetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	if id == "" {
 		http.Error(w, `{"error":"Не указан идентификатор"}`, http.StatusBadRequest)
@@ -184,7 +189,7 @@ func GetTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	var task Task
 	query := "SELECT * FROM scheduler WHERE id = ?"
-	err := db.QueryRow(query, id).Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	err := database.Db.QueryRow(query, id).Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			//http.Error(w, `{"error": "Задача не найдена"}`, http.StatusNotFound)
@@ -203,7 +208,7 @@ func GetTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	}
 }
 
-func UpdateTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+func UpdateTask(w http.ResponseWriter, r *http.Request) {
 	var task Task
 	err := json.NewDecoder(r.Body).Decode(&task)
 	if err != nil {
@@ -249,7 +254,7 @@ func UpdateTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	}
 
 	query := `UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`
-	res, err := db.Exec(query, task.Date, task.Title, task.Comment, task.Repeat, task.Id)
+	res, err := database.Db.Exec(query, task.Date, task.Title, task.Comment, task.Repeat, task.Id)
 	if err != nil {
 		http.Error(w, `{"error": "Task update error"}`, http.StatusInternalServerError)
 		return
@@ -271,7 +276,7 @@ func UpdateTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	w.Write([]byte("{}"))
 }
 
-func DoneTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+func DoneTask(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
@@ -285,7 +290,7 @@ func DoneTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	var task Task
 	query := `SELECT * FROM scheduler WHERE id = ?`
-	err := db.QueryRow(query, id).Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	err := database.Db.QueryRow(query, id).Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			//http.Error(w, `{"error": "Задача не найдена"}`, http.StatusNotFound)
@@ -311,7 +316,7 @@ func DoneTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 			log.Println("Invalid next date:", err)
 			return
 		}
-		res, err := db.Exec(`UPDATE scheduler SET date = ? WHERE id = ?`, nextDate, id)
+		res, err := database.Db.Exec(`UPDATE scheduler SET date = ? WHERE id = ?`, nextDate, id)
 		if err != nil {
 			http.Error(w, `{"error":"Task update error"}`, http.StatusInternalServerError)
 			log.Println("Task update error:", err)
@@ -327,7 +332,7 @@ func DoneTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 			return
 		}
 	} else {
-		_, err := db.Exec("DELETE FROM scheduler WHERE id = ?", id)
+		_, err := database.Db.Exec("DELETE FROM scheduler WHERE id = ?", id)
 		log.Println("CONTI: delete task id =", id)
 		if err != nil {
 			http.Error(w, `{"error":"Task delete error"}`, http.StatusInternalServerError)
@@ -341,14 +346,14 @@ func DoneTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	w.Write([]byte("{}"))
 }
 
-func DeleteTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+func DeleteTask(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	if id == "" {
 		http.Error(w, `{"error":"Не указан идентификатор"}`, http.StatusBadRequest)
 		return
 	}
 
-	res, err := db.Exec("DELETE FROM scheduler WHERE id = $1", id)
+	res, err := database.Db.Exec("DELETE FROM scheduler WHERE id = $1", id)
 	if err != nil {
 		http.Error(w, `{"error":"задача не найдена"}`, http.StatusInternalServerError)
 		return
@@ -368,4 +373,108 @@ func DeleteTask(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("{}"))
+}
+
+const tokenSecretKey = "abcdefghijklmnop"
+
+func SignIn(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	todoPass := os.Getenv("TODO_PASSWORD")
+	if todoPass == "" {
+		http.Error(w, `{"error":"Password not set"}`, http.StatusInternalServerError)
+		return
+	}
+
+	type UserPassword struct {
+		Password string `json:"password"`
+	}
+
+	var userPass UserPassword
+	err := json.NewDecoder(r.Body).Decode(&userPass)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	if userPass.Password != todoPass {
+		http.Error(w, `{"error": "Неверный пароль"}`, http.StatusUnauthorized)
+		return
+	}
+
+	hash := sha256.New()
+	hash.Write([]byte(todoPass))
+	todoPassHash := hex.EncodeToString(hash.Sum(nil))
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"control": todoPassHash,
+	})
+
+	tokenSigned, err := token.SignedString([]byte(tokenSecretKey))
+	if err != nil {
+		http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]string{
+		"token": tokenSigned,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func Auth(next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		todoPass := os.Getenv("TODO_PASSWORD")
+		if len(todoPass) > 0 {
+			cookie, err := r.Cookie("token")
+			if err != nil {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			tokenString := cookie.Value
+
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+				return []byte(tokenSecretKey), nil
+			})
+
+			if err != nil || !token.Valid {
+				http.Error(w, "Authentification required", http.StatusUnauthorized)
+				return
+			}
+
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok || !token.Valid {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			controlHash, ok := claims["control"].(string)
+			if !ok {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			hash := sha256.New()
+			hash.Write([]byte(todoPass))
+			todoPassHash := hex.EncodeToString(hash.Sum(nil))
+
+			log.Println("claims =", claims)
+			log.Println("control =", controlHash)
+			log.Println("todoPassHash =", todoPassHash)
+
+			if controlHash != todoPassHash {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		next(w, r)
+	})
 }

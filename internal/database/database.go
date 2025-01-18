@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 )
 
-func InitDb() (db *sql.DB) {
+var Db *sql.DB
+
+func InitDb() {
 	dbFileName := os.Getenv("TODO_DBFILE")
 	if dbFileName == "" {
 		dbFileName = "scheduler.db"
@@ -28,17 +30,17 @@ func InitDb() (db *sql.DB) {
 		install = true
 	}
 
-	db, err = sql.Open("sqlite", dbFile)
+	Db, err = sql.Open("sqlite", dbFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if install {
-		_, err = db.Exec("CREATE TABLE scheduler (id INTEGER PRIMARY KEY AUTOINCREMENT, date VARCHAR(8) NOT NULL DEFAULT '', title VARCHAR(128) NOT NULL DEFAULT '', comment TEXT NOT NULL DEFAULT '', repeat VARCHAR(128) NOT NULL DEFAULT '')")
+		_, err = Db.Exec("CREATE TABLE scheduler (id INTEGER PRIMARY KEY AUTOINCREMENT, date VARCHAR(8) NOT NULL DEFAULT '', title VARCHAR(128) NOT NULL DEFAULT '', comment TEXT NOT NULL DEFAULT '', repeat VARCHAR(128) NOT NULL DEFAULT '')")
 		if err != nil {
 			log.Fatal(err)
 		}
-		_, err = db.Exec("CREATE INDEX idx_scheduler_date ON scheduler (date)")
+		_, err = Db.Exec("CREATE INDEX idx_scheduler_date ON scheduler (date)")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -46,15 +48,13 @@ func InitDb() (db *sql.DB) {
 
 	fmt.Println(dbFile)  /////////////////////////////////////////////////////
 	fmt.Println(install) /////////////////////////////////////////////////////
-
-	return db
 }
 
-func AddTask(db *sql.DB, date, title, comment, repeat string) (int, error) {
+func AddTask(date, title, comment, repeat string) (int, error) {
 	query := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
 	log.Println("insert", date, title, comment, repeat)
 
-	result, err := db.Exec(query, date, title, comment, repeat)
+	result, err := Db.Exec(query, date, title, comment, repeat)
 	if err != nil {
 		log.Println(err)
 		return 0, fmt.Errorf("database insert error: %v", err)

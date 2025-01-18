@@ -26,16 +26,17 @@ func main() {
 	}
 	log.Printf("Working port: %s", port)
 
-	db := database.InitDb()
-	defer db.Close()
+	database.InitDb()
+	defer database.Db.Close()
 
 	webDir := "./web"
 
 	http.Handle("/", http.FileServer(http.Dir(webDir)))
 	http.HandleFunc("/api/nextdate", handlers.NextDate)
-	http.HandleFunc("/api/task", handlers.RootTask(db))
-	http.HandleFunc("/api/tasks", func(w http.ResponseWriter, r *http.Request) { handlers.GetTasks(w, r, db) })
-	http.HandleFunc("/api/task/done", func(w http.ResponseWriter, r *http.Request) { handlers.DoneTask(w, r, db) })
+	http.HandleFunc("/api/task", handlers.Auth(handlers.RootTask()))
+	http.HandleFunc("/api/tasks", handlers.Auth(handlers.GetTasks))
+	http.HandleFunc("/api/task/done", handlers.Auth(handlers.DoneTask))
+	http.HandleFunc("/api/signin", handlers.SignIn)
 
 	err = http.ListenAndServe(":"+port, nil)
 	if err != nil {
