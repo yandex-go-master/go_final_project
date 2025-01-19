@@ -143,13 +143,50 @@ func GetTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	const webuiDateFormat = "02.01.2006"
 	TasksLimit := 20
+	var rows *sql.Rows
+	var err error
 
-	rows, err := database.Db.Query("SELECT * FROM scheduler ORDER BY date ASC LIMIT ?", TasksLimit)
-	if err != nil {
-		http.Error(w, `{"error": "Database select error"}`, http.StatusInternalServerError)
-		return
+	search := r.FormValue("search")
+
+	// search = ""
+	// search = 08.02.2024
+	// search = бассейн
+	log.Println("SEARCH: search =", search)
+
+	if search != "" {
+		_, err := time.Parse(webuiDateFormat, search)
+		if err != nil {
+			searchQuery := "%" + search + "%"
+			rows, err = database.Db.Query("SELECT id, date, title, comment, repeat FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date ASC LIMIT ?", searchQuery, searchQuery, TasksLimit)
+			if err != nil {
+				log.Println(err)
+				http.Error(w, `{"error": "Database select error"}`, http.StatusInternalServerError)
+				return
+			}
+		} else {
+			searchDate, _ := time.Parse(webuiDateFormat, search)
+			searchDate2 := searchDate.Format(DateFormat)
+			log.Println("SEARCH: searchDate =", searchDate)
+			log.Println("SEARCH: searchDate2 =", searchDate2)
+			rows, err = database.Db.Query("SELECT id, date, title, comment, repeat FROM scheduler WHERE date = ? LIMIT ?", searchDate2, TasksLimit)
+			if err != nil {
+				log.Println("ERROR: searchDate")
+				log.Println(err)
+				http.Error(w, `{"error": "Database select error"}`, http.StatusInternalServerError)
+				return
+			}
+		}
+	} else {
+		rows, err = database.Db.Query("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date ASC LIMIT ?", TasksLimit)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, `{"error": "Database select error"}`, http.StatusInternalServerError)
+			return
+		}
 	}
+
 	defer rows.Close()
 
 	var tasks []Task

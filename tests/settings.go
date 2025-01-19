@@ -3,5 +3,5 @@ package tests
 var Port = 7540
 var DBFile = "../scheduler.db"
 var FullNextDate = true
-var Search = false
-var Token = `ВНИМАНИЕ! заменить перед тестированием`
+var Search = true
+var Token = `12345`
