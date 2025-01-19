@@ -15,7 +15,7 @@ func InitDb() {
 	if dbFileName == "" {
 		dbFileName = "scheduler.db"
 	}
-	log.Printf("Database filename: %s", dbFileName)
+	log.Printf("INFO: Database filename: %s", dbFileName)
 
 	appPath, err := os.Executable()
 	if err != nil {
@@ -28,6 +28,7 @@ func InitDb() {
 	var install bool
 	if err != nil {
 		install = true
+		log.Println("INFO: Database file not found. Creating new database...")
 	}
 
 	Db, err = sql.Open("sqlite", dbFile)
@@ -44,15 +45,14 @@ func InitDb() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		log.Println("INFO: Database created successfully")
 	}
 
-	fmt.Println(dbFile)  /////////////////////////////////////////////////////
-	fmt.Println(install) /////////////////////////////////////////////////////
+	log.Printf("INFO: Database file path: %s", dbFile)
 }
 
 func AddTask(date, title, comment, repeat string) (int, error) {
 	query := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
-	log.Println("insert", date, title, comment, repeat)
 
 	result, err := Db.Exec(query, date, title, comment, repeat)
 	if err != nil {
@@ -66,6 +66,5 @@ func AddTask(date, title, comment, repeat string) (int, error) {
 		return 0, fmt.Errorf("task id select error: %v", err)
 	}
 
-	log.Println(id)
 	return int(id), nil
 }

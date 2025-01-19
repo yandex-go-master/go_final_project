@@ -12,19 +12,19 @@ import (
 )
 
 func main() {
-	log.Println("Starting up...")
+	log.Println("INFO: Starting up...")
 
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal("ERR: Cannot load .env file")
 	}
-	log.Println(".env file loaded successfully")
+	log.Println("INFO: .env file loaded successfully")
 
 	port := os.Getenv("TODO_PORT")
 	if port == "" {
 		port = "7540"
 	}
-	log.Printf("Working port: %s", port)
+	log.Printf("INFO: Working port: %s", port)
 
 	database.InitDb()
 	defer database.Db.Close()
