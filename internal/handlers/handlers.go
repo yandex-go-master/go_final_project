@@ -18,6 +18,9 @@ import (
 )
 
 const DateFormat = "20060102"
+const webuiDateFormat = "02.01.2006"
+const TasksLimit = 20
+const tokenSecretKey = "abcdefghijklmnop"
 
 type Task struct {
 	Id      string `json:"id"`
@@ -25,6 +28,10 @@ type Task struct {
 	Title   string `json:"title"`
 	Comment string `json:"comment,omitempty"`
 	Repeat  string `json:"repeat,omitempty"`
+}
+
+type UserPassword struct {
+	Password string `json:"password"`
 }
 
 func NextDate(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +69,7 @@ func RootTask() func(w http.ResponseWriter, r *http.Request) {
 			DeleteTask(w, r)
 		default:
 			http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
-			log.Println("Method not allowed")
+			log.Println("ERR: Method not allowed")
 		}
 	}
 }
@@ -73,24 +80,24 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&task)
 	if err != nil {
 		http.Error(w, `{"error": "Invalid request payload"}`, http.StatusBadRequest)
-		log.Println("Invalid request payload:", err)
+		log.Println("ERR: invalid request payload:", err)
 		return
 	}
 
 	if task.Title == "" {
 		http.Error(w, `{"error": "Field 'title' is required"}`, http.StatusBadRequest)
-		log.Println("Field 'title' is required:", err)
+		log.Println("ERR: field 'title' is required:", err)
 		return
 	}
 
 	now := time.Now()
 	var taskDate time.Time
 
-	log.Println("ADDTASK: now =", now)
-	log.Println("ADDTASK: task.Date =", task.Date)
-	log.Println("ADDTASK: task.Title =", task.Title)
-	log.Println("ADDTASK: task.Comment =", task.Comment)
-	log.Println("ADDTASK: task.Repeat =", task.Repeat)
+	//log.Println("ADDTASK: now =", now)
+	//log.Println("ADDTASK: task.Date =", task.Date)
+	//log.Println("ADDTASK: task.Title =", task.Title)
+	//log.Println("ADDTASK: task.Comment =", task.Comment)
+	//log.Println("ADDTASK: task.Repeat =", task.Repeat)
 
 	if task.Date == "" {
 		task.Date = now.Format(DateFormat)
@@ -101,7 +108,7 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 		taskDate, err = time.Parse(DateFormat, task.Date)
 		if err != nil {
 			http.Error(w, `{"error": "Invalid date format"}`, http.StatusBadRequest)
-			log.Println("Invalid date format:", err)
+			log.Println("ERR: invalid date format:", err)
 			return
 		}
 	}
@@ -113,22 +120,22 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 			nextDate, err := nextdate.NextDate(now, task.Date, task.Repeat)
 			if err != nil {
 				http.Error(w, `{"error": "Invalid next date"}`, http.StatusInternalServerError)
-				log.Println("Invalid next date:", err)
+				log.Println("ERR: invalid next date:", err)
 				return
 			}
 			task.Date = nextDate
 		}
 	}
 
-	log.Println("INSERTTASK: task.Date =", task.Date)
-	log.Println("INSERTTASK: task.Title =", task.Title)
-	log.Println("INSERTTASK: task.Comment =", task.Comment)
-	log.Println("INSERTTASK: task.Repeat =", task.Repeat)
+	//log.Println("INSERTTASK: task.Date =", task.Date)
+	//log.Println("INSERTTASK: task.Title =", task.Title)
+	//log.Println("INSERTTASK: task.Comment =", task.Comment)
+	//log.Println("INSERTTASK: task.Repeat =", task.Repeat)
 
 	taskId, err := database.AddTask(task.Date, task.Title, task.Comment, task.Repeat)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Println("Invalid task Id:", err)
+		log.Println("ERR: invalid task Id:", err)
 		return
 	}
 
@@ -143,17 +150,12 @@ func GetTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	const webuiDateFormat = "02.01.2006"
-	TasksLimit := 20
 	var rows *sql.Rows
 	var err error
 
 	search := r.FormValue("search")
 
-	// search = ""
-	// search = 08.02.2024
-	// search = бассейн
-	log.Println("SEARCH: search =", search)
+	//log.Println("SEARCH: search =", search)
 
 	if search != "" {
 		_, err := time.Parse(webuiDateFormat, search)
@@ -161,28 +163,27 @@ func GetTasks(w http.ResponseWriter, r *http.Request) {
 			searchQuery := "%" + search + "%"
 			rows, err = database.Db.Query("SELECT id, date, title, comment, repeat FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date ASC LIMIT ?", searchQuery, searchQuery, TasksLimit)
 			if err != nil {
-				log.Println(err)
 				http.Error(w, `{"error": "Database select error"}`, http.StatusInternalServerError)
+				log.Println(err)
 				return
 			}
 		} else {
 			searchDate, _ := time.Parse(webuiDateFormat, search)
 			searchDate2 := searchDate.Format(DateFormat)
-			log.Println("SEARCH: searchDate =", searchDate)
-			log.Println("SEARCH: searchDate2 =", searchDate2)
+			//log.Println("SEARCH: searchDate =", searchDate)
+			//log.Println("SEARCH: searchDate2 =", searchDate2)
 			rows, err = database.Db.Query("SELECT id, date, title, comment, repeat FROM scheduler WHERE date = ? LIMIT ?", searchDate2, TasksLimit)
 			if err != nil {
-				log.Println("ERROR: searchDate")
-				log.Println(err)
 				http.Error(w, `{"error": "Database select error"}`, http.StatusInternalServerError)
+				log.Println(err)
 				return
 			}
 		}
 	} else {
 		rows, err = database.Db.Query("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date ASC LIMIT ?", TasksLimit)
 		if err != nil {
-			log.Println(err)
 			http.Error(w, `{"error": "Database select error"}`, http.StatusInternalServerError)
+			log.Println(err)
 			return
 		}
 	}
@@ -201,7 +202,7 @@ func GetTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := rows.Err(); err != nil {
-		http.Error(w, `{"error": "meta error"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "Rows scan error"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -213,14 +214,14 @@ func GetTasks(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, `{"error": "meta error"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "json encode error"}`, http.StatusInternalServerError)
 	}
 }
 
 func GetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	if id == "" {
-		http.Error(w, `{"error":"Не указан идентификатор"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"Task id not set"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -229,7 +230,6 @@ func GetTask(w http.ResponseWriter, r *http.Request) {
 	err := database.Db.QueryRow(query, id).Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			//http.Error(w, `{"error": "Задача не найдена"}`, http.StatusNotFound)
 			http.Error(w, `{"error": "Task not found"}`, http.StatusNotFound)
 		} else {
 			http.Error(w, `{"error": "Internal Server Error"}`, http.StatusInternalServerError)
@@ -241,7 +241,7 @@ func GetTask(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(task)
 	if err != nil {
-		http.Error(w, `{"error": "meta error"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "json encode error"}`, http.StatusInternalServerError)
 	}
 }
 
@@ -271,7 +271,7 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 		taskDate, err = time.Parse(DateFormat, task.Date)
 		if err != nil {
 			http.Error(w, `{"error": "Invalid date format"}`, http.StatusBadRequest)
-			log.Println("Invalid date format:", err)
+			log.Println("ERR: invalid date format:", err)
 			return
 		}
 	}
@@ -283,7 +283,7 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 			nextDate, err := nextdate.NextDate(now, task.Date, task.Repeat)
 			if err != nil {
 				http.Error(w, `{"error": "Invalid next date"}`, http.StatusInternalServerError)
-				log.Println("Invalid next date:", err)
+				log.Println("ERR: invalid next date:", err)
 				return
 			}
 			task.Date = nextDate
@@ -303,11 +303,10 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rowsAffected == 0 {
-		http.Error(w, `{"error":"Задача не найдена"}`, http.StatusNotFound)
+		http.Error(w, `{"error":"Task not found"}`, http.StatusNotFound)
 		return
 	}
 
-	// Устанавливаем заголовок Content-Type и код состояния
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("{}"))
@@ -321,42 +320,41 @@ func DoneTask(w http.ResponseWriter, r *http.Request) {
 
 	id := r.FormValue("id")
 	if id == "" {
-		http.Error(w, `{"error":"Не указан идентификатор"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"Task id not set"}`, http.StatusBadRequest)
 		return
 	}
 
 	var task Task
-	query := `SELECT * FROM scheduler WHERE id = ?`
+	query := `SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?`
 	err := database.Db.QueryRow(query, id).Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			//http.Error(w, `{"error": "Задача не найдена"}`, http.StatusNotFound)
 			http.Error(w, `{"error":"Task not found"}`, http.StatusNotFound)
 		} else {
-			http.Error(w, `{"error":"ошибка получения задачи"}`, http.StatusInternalServerError)
+			http.Error(w, `{"error":"Database select error"}`, http.StatusInternalServerError)
 		}
 		return
 	}
 
 	now := time.Now()
-	log.Println("BEGIN: now =", now)
-	log.Println("CONTI: task.Id =", task.Id)
-	log.Println("CONTI: task.Date =", task.Date)
-	log.Println("CONTI: task.Title =", task.Title)
-	log.Println("CONTI: task.Comment =", task.Comment)
-	log.Println("CONTI: task.Repeat =", task.Repeat)
+	//log.Println("BEGIN: now =", now)
+	//log.Println("CONTI: task.Id =", task.Id)
+	//log.Println("CONTI: task.Date =", task.Date)
+	//log.Println("CONTI: task.Title =", task.Title)
+	//log.Println("CONTI: task.Comment =", task.Comment)
+	//log.Println("CONTI: task.Repeat =", task.Repeat)
 	if task.Repeat != "" {
 		nextDate, err := nextdate.NextDate(now, task.Date, task.Repeat)
-		log.Println("CONTI: nextDate =", nextDate)
+		//log.Println("CONTI: nextDate =", nextDate)
 		if err != nil {
 			http.Error(w, `{"error":"NextDate error"}`, http.StatusInternalServerError)
-			log.Println("Invalid next date:", err)
+			log.Println("ERR: invalid next date:", err)
 			return
 		}
 		res, err := database.Db.Exec(`UPDATE scheduler SET date = ? WHERE id = ?`, nextDate, id)
 		if err != nil {
 			http.Error(w, `{"error":"Task update error"}`, http.StatusInternalServerError)
-			log.Println("Task update error:", err)
+			log.Println("ERR: task update error:", err)
 			return
 		}
 		rowsAffected, err := res.RowsAffected()
@@ -365,15 +363,15 @@ func DoneTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if rowsAffected == 0 {
-			http.Error(w, `{"error":"Задача не найдена"}`, http.StatusNotFound)
+			http.Error(w, `{"error":"Task not found"}`, http.StatusNotFound)
 			return
 		}
 	} else {
 		_, err := database.Db.Exec("DELETE FROM scheduler WHERE id = ?", id)
-		log.Println("CONTI: delete task id =", id)
+		//log.Println("CONTI: delete task id =", id)
 		if err != nil {
 			http.Error(w, `{"error":"Task delete error"}`, http.StatusInternalServerError)
-			log.Println("Task delete error:", err)
+			log.Println("ERR: task delete error:", err)
 			return
 		}
 	}
@@ -386,24 +384,24 @@ func DoneTask(w http.ResponseWriter, r *http.Request) {
 func DeleteTask(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	if id == "" {
-		http.Error(w, `{"error":"Не указан идентификатор"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"Nask id not set"}`, http.StatusBadRequest)
 		return
 	}
 
 	res, err := database.Db.Exec("DELETE FROM scheduler WHERE id = $1", id)
 	if err != nil {
-		http.Error(w, `{"error":"задача не найдена"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"Task not found"}`, http.StatusInternalServerError)
 		return
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		http.Error(w, `{"error": "Task update error"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "Task delete error"}`, http.StatusInternalServerError)
 		return
 	}
 
 	if rowsAffected == 0 {
-		http.Error(w, `{"error":"Задача не найдена"}`, http.StatusNotFound)
+		http.Error(w, `{"error":"Task not found"}`, http.StatusNotFound)
 		return
 	}
 
@@ -411,8 +409,6 @@ func DeleteTask(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("{}"))
 }
-
-const tokenSecretKey = "abcdefghijklmnop"
 
 func SignIn(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -426,10 +422,6 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type UserPassword struct {
-		Password string `json:"password"`
-	}
-
 	var userPass UserPassword
 	err := json.NewDecoder(r.Body).Decode(&userPass)
 	if err != nil {
@@ -438,7 +430,7 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if userPass.Password != todoPass {
-		http.Error(w, `{"error": "Неверный пароль"}`, http.StatusUnauthorized)
+		http.Error(w, `{"error": "Invalid password"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -452,7 +444,7 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 
 	tokenSigned, err := token.SignedString([]byte(tokenSecretKey))
 	if err != nil {
-		http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
+		http.Error(w, `{"error": "Toker create error"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -470,7 +462,7 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 		if len(todoPass) > 0 {
 			cookie, err := r.Cookie("token")
 			if err != nil {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
 			tokenString := cookie.Value
@@ -483,19 +475,19 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 			})
 
 			if err != nil || !token.Valid {
-				http.Error(w, "Authentification required", http.StatusUnauthorized)
+				http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
 
 			claims, ok := token.Claims.(jwt.MapClaims)
 			if !ok || !token.Valid {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
 
 			controlHash, ok := claims["control"].(string)
 			if !ok {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
 
@@ -503,12 +495,12 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 			hash.Write([]byte(todoPass))
 			todoPassHash := hex.EncodeToString(hash.Sum(nil))
 
-			log.Println("claims =", claims)
-			log.Println("control =", controlHash)
-			log.Println("todoPassHash =", todoPassHash)
+			//log.Println("claims =", claims)
+			//log.Println("control =", controlHash)
+			//log.Println("todoPassHash =", todoPassHash)
 
 			if controlHash != todoPassHash {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
 		}
